@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#by liguopeng email:liguopeng@eyou.net
+#检测本机器master or slave 状态
+SENDMAIL_PID_FILE="/usr/local/eyou/mail/sendEmail-v1.56/run"
+
+[ -d $SENDMAIL_PID_FILE ] || mkdir $SENDMAIL_PID_FILE
+
+#引入配置文件
+SENDMAIL_CONF="/usr/local/eyou/mail/sendEmail-v1.56/sendemail.ini"
+[ -f $SENDMAIL_CONF ] && . $SENDMAIL_CONF || exit 1
+
+#判断虚IP是否在本机 如在本机 master 否则 slave
+if [ $(ip a|awk '$2~/'"$EMAIL_VIP"'\/[0-9][0-9]$/{print $2,$8}'|wc -l) -eq 0 ];then
+	ha_status_master_slave="Slave_$(hostname)"
+elif [ $(ip a|awk '$2~/'"$EMAIL_VIP"'\/[0-9][0-9]$/{print $2,$8}'|wc -l) -eq 1 ];then
+	ha_status_master_slave="Master_$(hostname)"
+else
+	ha_status_master_slave=Master_Slave
+fi
+
+#定义环境变量名称
+if [ "$ha_status_master_slave" != "Master_Slave" ];then
+#定义当前目录变量
+	EYOU_TMP_CHECK_DIR="${EYOU_TMP_lgp_DIR}/$ha_status_master_slave"
+#定义磁盘扫描日志存放目录
+	CHECK_DISK_SCAN_CONF="${EYOU_TMP_CHECK_DIR}/${CHECK_DISK_SCAN}"
+	EYOU_CHECK_DISK_XT="${EYOU_TMP_lgp_DIR}/.disk_scan"
+#检测所有节点到上线状态
+	CHECK_NODE_START_CONF="${EYOU_TMP_CHECK_DIR}/${CHECK_NODE_START}"
+	CHECK_NODE_START_EMAIL_CONF="${EYOU_TMP_CHECK_DIR}/${CHECK_NODE_START_EMAIL}"
+#检测所有节点网络状态
+	CHECK_NODE_NETWORK_CONF="${EYOU_TMP_CHECK_DIR}/${CHECK_NODE_NETWORK}"
+	CHECK_NODE_NETWORK_EMAIL_CONF="${EYOU_TMP_CHECK_DIR}/${CHECK_NODE_NETWORK_EMAIL}"
+#配置发送邮件到缓存文件
+	SEND_EMAILFILE_CONF="${EYOU_TMP_CHECK_DIR}/${SEND_EMAILFILE}"
+#定义eyou启动停止的存放日志
+	EYOU_SER_FILE_CONF="${EYOU_TMP_CHECK_DIR}/${EYOU_SER_FILE}"
+#邮件服务变更的文件FAIL
+EYOU_SER_FAIL_FILE_CONF="${EYOU_TMP_CHECK_DIR}/${EYOU_SER_FAIL_FILE}"
+#配置快照缓存文件
+	EYOU_take_snap_dirname_CONF="${EYOU_TMP_CHECK_DIR}/${EYOU_take_snap_dirname}"
+else
+	:
+fi
+[ -d $EYOU_TMP_CHECK_DIR ] || mkdir $EYOU_TMP_CHECK_DIR -p

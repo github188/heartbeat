@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+SENDMAIL_FILE="/usr/local/eyou/mail/sendEmail-v1.56"
+EYOU_MAIL="$SENDMAIL_FILE/eyou_mail"
+if [ -f $SENDMAIL_FILE/eyou_mail_pid ];then
+	:
+else
+pid_num=$(grep -n '^PIDF_' $EYOU_MAIL|tail -1 |awk -F ':' '{print $1}')
+head -$pid_num $EYOU_MAIL > $SENDMAIL_FILE/eyou_mail_test
+sh -x $SENDMAIL_FILE/eyou_mail_test > $SENDMAIL_FILE/eyou_mail_pid 2>&1
+rm -rf $SENDMAIL_FILE/eyou_mail_test
+sed -i 's/^+ //g' $SENDMAIL_FILE/eyou_mail_pid
+fi

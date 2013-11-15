@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# by liguopeng	email: liguopeng@eyou.net
+
+SENDMAIL_FILE="/usr/local/eyou/mail/sendEmail-v1.56"
+SENDMAIL="$SENDMAIL_FILE/sendEmail"
+#引入配置文件
+[ -f $SENDMAIL_FILE/check_master_slave ] && . $SENDMAIL_FILE/check_master_slave || exit 1
+
+pid_name="$(basename $0).pid"
+
+
+case $1 in
+	start)
+		touch $SENDMAIL_PID_FILE/$pid_name
+		exit 0;
+	;;
+	stop)
+		rm -rf $SENDMAIL_PID_FILE/$pid_name
+		exit 0;
+	;;
+	status)
+		[ -f $SENDMAIL_PID_FILE/$pid_name ] && exit 0 || exit 1
+	;;
+	*)
+		echo "$0 为中间件程序 "
+esac

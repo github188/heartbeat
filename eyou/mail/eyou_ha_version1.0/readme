@@ -1,0 +1,6 @@
+#深度集成eyou服务的HA
+运行环境 仅限redhat 发行版  pacemaker 的配置
+仅支持两台机器使用
+负载IP目前仅支持一个
+磁盘支持NFS 以及其他非NFS类型
+version: 1.0

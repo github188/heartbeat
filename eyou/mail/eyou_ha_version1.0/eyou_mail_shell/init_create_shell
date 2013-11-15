@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+CONFIG_FILE="/usr/local/eyou/mail/etc/em_init_config"
+[ -f $CONFIG_FILE ] && . $CONFIG_FILE || exit 123
+
+if test $1;then
+for i in ${ARRAY_START[@]}
+do
+	cp -arf $1 ./eyou_mail_$i
+	chmod +x ./eyou_mail_$i
+	chown -R eyou.eyou ./eyou_mail_$i
+done
+fi
