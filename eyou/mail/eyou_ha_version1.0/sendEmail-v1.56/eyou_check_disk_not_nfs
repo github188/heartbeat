@@ -82,7 +82,7 @@ start_check () {
 fdisk -l ${EYOU_DISK_XT} >/dev/null  2>&1 || exit 133
 DISK_TEST_SIZ=$(fdisk -l ${EYOU_DISK_XT} |grep "${EYOU_DISK_XT}"|awk '{print $5}')
 if [ "${DISK_TEST_SIZ}" -gt "15697920" ];then echo "$(hostname) $(date +%'F %H:%M:%S') $EYOU_DISK_XT 磁盘大小大于15M...."; exit 123;fi
-dd if=${EYOU_DISK_XT} of=${EYOU_CHECK_DISK_XT} >/dev/null 2>&1
+dd if=${EYOU_DISK_XT} of=${EYOU_CHECK_DISK_XT} >/dev/null 2>&1;
 until [ -f ${EYOU_CHECK_DISK_XT} ];do dd if=${EYOU_DISK_XT} of=${EYOU_CHECK_DISK_XT} >/dev/null 2>&1;done
 
 #if [ "$(head -1 ${EYOU_CHECK_DISK_XT} |grep ^1 |wc -l)" -eq "1" ];then
@@ -105,7 +105,6 @@ check_time_disk=$(echo "${check_time_disk_1}"+2|bc)
 			echo "$(hostname) $(date +%'F %H:%M:%S') $EYOU_DISK_XT 磁盘在规定时间内未有改动，将执行mount挂载动作.">>$CHECK_DISK_SCAN_CONF
 			CHECK_TIME > $EYOU_CHECK_DISK_XT 2>/dev/null
 			dd if=${EYOU_CHECK_DISK_XT} of=${EYOU_DISK_XT} >/dev/null 2>&1
-			until [ -f ${EYOU_DISK_XT} ];do dd if=${EYOU_CHECK_DISK_XT} of=${EYOU_DISK_XT} >/dev/null 2>&1;done
 			exit_val=0
 		else
 			echo "$(hostname) $(date +%'F %H:%M:%S') $EYOU_DISK_XT 磁盘在规定时间内有改动，停止启动,退出.">>$CHECK_DISK_SCAN_CONF
@@ -145,7 +144,6 @@ check_time_disk_1=$(crm configure show xml |grep eyou_check_disk|grep monitor|aw
 check_time_disk=$(echo "${check_time_disk_1}"+2|bc)
 	CHECK_TIME>$CHECK_FILE 2>/dev/null
 	dd if=${EYOU_CHECK_DISK_XT} of=${EYOU_DISK_XT} >/dev/null 2>&1
-	until [ -f ${EYOU_DISK_XT} ];do dd if=${EYOU_CHECK_DISK_XT} of=${EYOU_DISK_XT} >/dev/null 2>&1;done
 	exit_val=$?
 if [ $exit_val -eq 0 ];then
 	exit $exit_val
@@ -159,7 +157,6 @@ stop_check () {
 #if [ "${ha_status_master_slave}" == "Master_$(hostname)" ];then
 if [ -f $SENDMAIL_PID_FILE/$pid_name ];then
 dd if=/dev/zero of=${EYOU_DISK_XT} >/dev/null 2>&1
-until [ -f ${EYOU_DISK_XT} ];do dd if=/dev/zero of=${EYOU_DISK_XT} >/dev/null 2>&1;done
 else
 	:
 fi
