@@ -130,7 +130,7 @@ dd if=${EYOU_DISK_XT} of=/tmp/.test_disk_check >/dev/null 2>&1
 if [ "$(head -1 /tmp/.test_disk_check|cut -d ' ' -f2)" == "$(head -1 $EYOU_CHECK_DISK_XT|cut -d ' ' -f2)" ];then
 	rm -rf /tmp/.test_disk_check
 else
-	echo "${EYOU_DISK_XT} 上一次的磁盘数据非本机修改，退出。">>$CHECK_DISK_SCAN_CONF
+	echo "$(hostname) $(date +%'F %H:%M:%S') ${EYOU_DISK_XT} 上一次的磁盘数据非本机修改，退出。">>$CHECK_DISK_SCAN_CONF
 	exit 110
 fi
 CHECK_FILE=${EYOU_CHECK_DISK_XT}
