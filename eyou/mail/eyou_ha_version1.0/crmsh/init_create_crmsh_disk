@@ -29,6 +29,7 @@ crm configure primitive eyou_mount_disk_${i} ocf:heartbeat:Filesystem params dev
 else
 echo "
 crm configure primitive eyou_mount_disk_${i} ocf:heartbeat:Filesystem params device=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f1) directory=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f2) fstype=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f3) options=nolock,tcp op start interval=0 timeout=60 op stop interval=0 timeout=60 meta migration-threshold=5 resource-stickiness=10
+crm configure clone eyou_mount_clone_${i} eyou_mount_disk_${i} meta globally-unique=false
 "
 fi
 done
@@ -95,12 +96,14 @@ elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "ext" ];then
 		done
 	elif [ "$DISK_NUM" == "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs =1"
-		echo "crm configure order eyou_mount_after inf: eyou_mount_disk_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
+#		echo "crm configure order eyou_mount_after inf: eyou_mount_disk_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
+		echo "crm configure order eyou_mount_after inf: eyou_mount_clone_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
 	elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs gt 1"
 		for i in `seq $DISK_NUM`
 		do
-		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_disk_${i} eyou_check_disk eyou_mail_vip"
+#		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_disk_${i} eyou_check_disk eyou_mail_vip"
+		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_clone_${i} eyou_check_disk eyou_mail_vip"
 		done
 	else
 		:
