@@ -158,10 +158,10 @@ if test "root" != `whoami`; then
 fi
 
 # 必须以 eyou 身份执行
-if ! sudo ls $PATH_MAIL > /dev/null 2>&1; then
-    echo "system must can exec sudo cmd."
-    exit 1
-fi
+#if ! sudo ls $PATH_MAIL > /dev/null 2>&1; then
+#    echo "system must can exec sudo cmd."
+#    exit 1
+#fi
 
 # 置标准输出和标准错误输出
 reassign_errout
@@ -596,6 +596,7 @@ process_watch ()
         watch_proc "$i" "$t_proc_num_watch"
 
         if test "0" = "$watch_res"; then
+	    exit_val=0
             sp_pad_pid_no=`echo "$pid_no" | sed "s/[0-9-]/ /g"`
             sed_replace=`echo "$sp_pad_pid_no$sp_pad" | sed 's/\//\\\\\//g'`
             watch_tree=`echo -e "$watch_tree" | sed "s/^ /$sed_replace/g"`
@@ -1484,7 +1485,7 @@ start ()
         if test 0 = $init_res; then
             echo_stdout -e "[$ECHO_OK]$start_out_last"
         elif test 2 = $init_res; then
-            exit_val=1
+            exit_val=0
             echo_stdout -e "[$ECHO_FAIL]$start_out_last  $i (pid $pid_no) already running"
         else
             exit_val=1
@@ -1522,7 +1523,7 @@ stop ()
         if test 0 = $init_res; then
             echo_stdout -e "[$ECHO_OK]"
         else
-            exit_val=1
+            exit_val=0
             echo_stdout -e "[$ECHO_FAIL]  $init_msg"
         fi
     done
