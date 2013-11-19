@@ -1558,7 +1558,9 @@ case "$ARG1" in
     watch)
         log_begin watch
         process_watch "$ARG2"
+        exit_val_tmp="$exit_val"
         log_end watch
+        exit_val="$exit_val_tmp"
     ;;
     start)
         log_begin start
