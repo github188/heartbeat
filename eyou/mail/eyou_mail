@@ -1,0 +1,1595 @@
+#!/bin/bash
+#
+# vim: set expandtab tabstop=4 shiftwidth=4 softtabstop=4 foldmethod=marker:
+#
+# chkconfig: 2345 80 30
+# description: the start/stop/restart script of eYou Mail system
+#
+# eyou mail 初始化脚本
+#
+#
+# 此脚本将控制如下进程, 如果进程列表有变化, 则必须更新 Start, Stop 和 Watch:
+#   Kav
+#   Httpd
+#   Nginx
+#   MySQL
+#   +Memcache
+#     memcache session
+#     memcache fix
+#     memcache hot
+#   Gearman
+#   crtmpd
+#   syslog
+#   phpd
+#   +Filed
+#     filed
+#     filedagent
+#     filedrepd
+#   +MTA
+#     pop3d
+#     imapd
+#     smtpd
+#     mlistd
+#     remoted
+#     locald
+#     bounced
+#     antivirus
+#     virusd
+#     cleanup
+#
+# 返回代码
+#   0  : 成功
+#   1  : 处理失败 (start 失败 / stop 失败 / watch 失败)
+#   127: 参数错误
+#
+
+
+PATH_MAIL="/usr/local/eyou/mail"
+PATH_APP="$PATH_MAIL"
+PATH_BIN="$PATH_APP/bin"
+PATH_SBIN="$PATH_APP/sbin"
+PATH_ETC="$PATH_MAIL/etc"
+PATH_RUN="$PATH_MAIL/run"
+PATH_DATA="$PATH_MAIL/data"
+PATH_TMP_MAIL="$PATH_MAIL/tmp/mail"
+PATH_LOG="$PATH_MAIL/log"
+PATH_LOG_STDOUT="$PATH_LOG/stdout"
+PATH_OPT="$PATH_MAIL/opt"
+PATH_OPT_BIN="$PATH_OPT/bin"
+PATH_OPT_SBIN="$PATH_OPT/sbin"
+PATH_OPT_CONF="$PATH_OPT/conf"
+PATH_OPT_MYSQL="$PATH_OPT/mysql"
+PATH_OPT_MPROXY="$PATH_OPT/mproxy"
+PATH_OPT_CRTMPD="$PATH_OPT/crtmpd"
+PATH_INITLOG="$PATH_LOG/init.out"
+PATH_EM_CROND="/etc/cron.d/eyou_mail"
+PATH_CONFIG="$PATH_ETC/em_init_config"
+PATH_PWD="/home/eyou"
+
+PIDF_MYSQL="$PATH_RUN/em_mysql.pid"
+PIDF_MYSQL_INDEX="$PATH_RUN/em_mysql_index.pid"
+PIDF_MYSQL_LOG="$PATH_RUN/em_mysql_log.pid"
+PIDF_MPROXY="$PATH_RUN/em_mproxy.pid"
+PIDF_MPROXY_INDEX="$PATH_RUN/em_mproxy_index.pid"
+PIDF_MPROXY_LOG="$PATH_RUN/em_mproxy_log.pid"
+PIDF_HTTPD="$PATH_RUN/em_httpd.pid"
+PIDF_NGINX="$PATH_RUN/em_nginx.pid"
+PIDF_MEMCACHE_SESSION="$PATH_RUN/em_memcache_session.pid"
+PIDF_MEMCACHE_FIX="$PATH_RUN/em_memcache_fix.pid"
+PIDF_MEMCACHE_HOT="$PATH_RUN/em_memcache_hot.pid"
+PIDF_GEARMAN="$PATH_RUN/em_gearman.pid"
+PIDF_CRTMPD="$PATH_RUN/em_crtmpserver.pid"
+PIDF_PHPD="$PATH_RUN/em_phpd.pid"
+PIDF_SYSLOG="$PATH_RUN/em_syslogd.pid"
+PIDF_FILEDAGENT="$PATH_RUN/em_filedagent.pid"
+PIDF_FILEDREPD="$PATH_RUN/em_filedrepd.pid"
+PIDF_FILED="$PATH_RUN/em_filed.pid"
+PIDF_POP="$PATH_RUN/em_pop3d.pid"
+PIDF_IMAP="$PATH_RUN/em_imapd.pid"
+PIDF_SMTP="$PATH_RUN/em_smtpd.pid"
+PIDF_MLIST="$PATH_RUN/em_mlist.pid"
+PIDF_REMOTE="$PATH_RUN/em_remote.pid"
+PIDF_LOCAL="$PATH_RUN/em_local.pid"
+PIDF_BOUNCE="$PATH_RUN/em_bounce.pid"
+PIDF_VIRUSD="$PATH_RUN/em_virusd.pid"
+PIDF_ANTIVIRUS="$PATH_RUN/em_antivirus.pid"
+PIDF_CLEANUP="$PATH_RUN/em_cleanup.pid"
+PIDF_KAV="$PATH_RUN/em_kavehost.pid"
+
+PIDF_SMTP_1="$PATH_RUN/em_smtpd_1.pid"
+PIDF_SMTP_2="$PATH_RUN/em_smtpd_2.pid"
+PIDF_SMTP_3="$PATH_RUN/em_smtpd_3.pid"
+PIDF_SMTP_4="$PATH_RUN/em_smtpd_4.pid"
+PIDF_SMTP_5="$PATH_RUN/em_smtpd_5.pid"
+
+ECHO_LINE="------------------------------"
+ECHO_FAIL="\033[0;31mFAIL\033[0m"
+ECHO_OK="\033[0;32mOK\033[0m"
+
+EXEC_USER="eyou"
+EXEC_GROUP="eyou"
+
+CMD_SUDO_EYOU="sudo -u $EXEC_USER"
+
+
+# 获取 uid 和 gid
+EXEC_UID=`id $EXEC_USER -u`
+EXEC_GID=`id $EXEC_GROUP -g`
+
+# 判断用户是否能获取到
+if ! test "$EXEC_UID"; then
+    echo "EXEC_USER $EXEC_USER not exists. "
+    exit 1
+fi
+if ! test "$EXEC_GID"; then
+    echo "EXEC_GROUP $EXEC_GROUP not exists. "
+    exit 1
+fi
+
+# 引入配置文件
+if ! test -f $PATH_CONFIG; then
+    echo "can not load config file"
+    exit 1
+fi
+
+. $PATH_CONFIG
+
+
+reassign_stdout ()
+{
+    exec 6>&1
+    exec >> $PATH_INITLOG
+}
+
+restore_stdout ()
+{
+    exec 1>&6 6>&-
+}
+
+reassign_errout ()
+{
+    exec 2>>$PATH_INITLOG
+}
+
+# 必须以 eyou 身份执行
+if test "root" != `whoami`; then
+    echo "It must exec as 'root' user."
+    exit 1
+fi
+
+# 必须以 eyou 身份执行
+if ! sudo ls $PATH_MAIL > /dev/null 2>&1; then
+    echo "system must can exec sudo cmd."
+    exit 1
+fi
+
+# 置标准输出和标准错误输出
+reassign_errout
+reassign_stdout
+
+echo_stdout ()
+{
+    restore_stdout
+
+    echo_argv=""
+    echo_con=$1
+    if test "$2"; then
+        echo_argv=$1
+        echo_con=$2
+    fi
+
+    echo $echo_argv "$echo_con"
+
+    reassign_stdout
+}
+
+get_max_len ()
+{
+    max_len_i="0"
+    for i in "$@"; do
+        len_i="${#i}"
+
+        if test "$len_i" -gt "$max_len_i"; then
+            max_len_i="$len_i"
+        fi
+    done
+
+    echo $max_len_i
+}
+
+check_proc_disp_name ()
+{
+    if ! test "$1"; then
+        echo 1
+        return
+    fi
+
+    for i in "${ARRAY_START[@]}"; do
+        if test "$1" = "$i"; then
+            echo 2
+            return
+        fi
+    done
+
+    echo 0
+}
+
+log_begin ()
+{
+    log_con="$ECHO_LINE\n"`date +'%Y-%m-%d %H:%M:%S'`" $1 begin\n"
+    echo -e "$log_con"
+}
+
+log_end ()
+{
+    log_con="\n"`date +'%Y-%m-%d %H:%M:%S'`" $1 end"
+    echo -e "$log_con"
+}
+
+usage ()
+{
+    echo_stdout "Usage:"
+    echo_stdout ""
+    echo_stdout "  Start/Stop all process:"
+    echo_stdout "    $0 [start | stop]"
+    echo_stdout ""
+    echo_stdout "  Stop all process without MySQL/MemcacheX/GearmanX:"
+    echo_stdout "    $0 stops"
+    echo_stdout ""
+    echo_stdout "  Start/Stop one process:"
+    echo_stdout "    $0 [start | stop] ProcName"
+    echo_stdout ""
+    echo_stdout "  Watch all process status:"
+    echo_stdout "    $0 watch"
+    echo_stdout ""
+    echo_stdout "  Watch one process status:"
+    echo_stdout "    $0 watch ProcName"
+    echo_stdout ""
+    echo_stdout "    ProcName must be one of the following:"
+    for i in "${ARRAY_START[@]}"; do
+        echo_stdout "      $i"
+    done
+}
+
+init_var ()
+{
+    exit_val=0
+}
+
+init_var
+
+# {{{ build dir
+
+build_hex_hash ()
+{
+    array_hex_dir=(0 1 2 3 4 5 6 7 8 9 a b c d e f)
+
+    for i in "${array_hex_dir[@]}"; do
+        path_hash=$1/$i
+        mkdir -p $path_hash -m 0755
+        chown $EXEC_USER:$EXEC_GROUP $path_hash
+
+        if test $3; then
+            _hash_num=$3
+        else
+            _hash_num=1
+        fi
+
+        if test $_hash_num -lt $2; then
+            let "_hash_num = _hash_num + 1"
+            build_hex_hash $path_hash $2 $_hash_num
+        fi
+    done
+}
+
+build_dir_hex_hash_popcache ()
+{
+    if test "$PATH_DATA_POPCACHE"; then
+        build_hex_hash $PATH_DATA_POPCACHE 2
+        chown $EXEC_USER:$EXEC_GROUP $PATH_DATA_POPCACHE
+    fi
+}
+
+# }}}
+
+# {{{ watch
+
+init_watch_var ()
+{
+    get_pid_res="1"
+    pid_no=""
+    pstree_pid_res="3"
+    watch_tree=""
+
+    # 成功: 0 | pid 文件不存在: 1 | pid 文件内容错误: 2 | 进程不存在: 3 | 其他错误: 具体错误信息
+    watch_res="0"
+
+    x=0; y=0; n=1
+    array_watch_disp_name=()
+    array_watch_proc_name=()
+    for i in "${ARRAY_WATCH[@]}"; do
+        let "n_mod = n % 2"
+
+        if test 1 = $n_mod; then
+            array_watch_disp_name[$x]=$i
+            let "x += 1"
+        else
+            array_watch_proc_name[$y]=$i
+            let "y += 1"
+        fi
+
+        let "n += 1"
+    done
+}
+
+# 执行初始化变量
+init_watch_var
+
+get_pid ()
+{
+    get_pid_res="1"
+    pid_no=""
+    if test -r "$1"; then
+        pid_no=`head -n 1 $1`
+        if test -z "$pid_no"; then
+            get_pid_res="2"
+        else
+            get_pid_res="0"
+        fi
+    else
+        get_pid_res="1"
+    fi
+}
+
+pstree_pid ()
+{
+    pstree_pid_res="3"
+    watch_tree=`pstree $1`
+
+    if test -z "$watch_tree"; then
+        pstree_pid_res="3"
+    else
+        pstree_pid_res="0"
+    fi
+}
+
+get_proc_name ()
+{
+    n=0
+    for i in "${array_watch_disp_name[@]}"; do
+            if test "$1" = "$i"; then
+                break
+            fi
+        let "n += 1"
+    done
+
+    echo "${array_watch_proc_name[$n]}"
+}
+
+watch_mysql ()
+{
+    watch_mysql_base
+}
+
+watch_mysql_index ()
+{
+    watch_mysql_base "_index" "_INDEX"
+}
+
+watch_mysql_log ()
+{
+    watch_mysql_base "_log" "_LOG"
+}
+
+watch_mysql51 ()
+{
+    watch_mysql_base "" "" "51"
+}
+
+watch_mysql51_index ()
+{
+    watch_mysql_base "_index" "_INDEX" "51"
+}
+
+watch_mysql51_log ()
+{
+    watch_mysql_base "_log" "_LOG" "51"
+}
+
+watch_mysql55 ()
+{
+    watch_mysql_base "" "" "55"
+}
+
+watch_mysql55_index ()
+{
+    watch_mysql_base "_index" "_INDEX" "55"
+}
+
+watch_mysql55_log ()
+{
+    watch_mysql_base "_log" "_LOG" "55"
+}
+
+watch_mysql56 ()
+{
+    watch_mysql_base "" "" "56"
+}
+
+watch_mysql56_index ()
+{
+    watch_mysql_base "_index" "_INDEX" "56"
+}
+
+watch_mysql56_log ()
+{
+    watch_mysql_base "_log" "_LOG" "56"
+}
+
+watch_mysql_base ()
+{
+    watch_res="0"
+    type_mysql_lower="$1"
+    type_mysql_upper="$2"
+    var_mysql="$3"
+
+    CMD_MYSQL_PING="./bin/mysqladmin --defaults-file=$PATH_ETC/mysql/my$type_mysql_lower.cnf ping"
+
+    eval 'pid_mysql="$PIDF_MYSQL'"$type_mysql_upper"'"'
+    # 获取 pid
+    get_pid "$pid_mysql"
+    if test "0" != "$get_pid_res"; then
+        watch_res="$get_pid_res"
+        return
+    fi
+
+    if ! cd $PATH_OPT_MYSQL$var_mysql; then
+        watch_res="mysql$var_mysql dir is not exists"
+        return
+    fi
+
+    # ping 一下是否通
+    eval $CMD_MYSQL_PING
+    if test 0 != $?; then
+        watch_res="mysql$var_mysql$type_mysql_lower is not alive"
+        return
+    fi
+    cd $PATH_PWD
+
+    # 获取 mysqld_safe 的 pid
+    mysqld_safe_pid=`ps -C mysqld -o ppid,pid | grep "\<$pid_no\>" | awk '{print $1}'`
+    if ! test "$mysqld_safe_pid"; then
+        watch_res="mysqld_safe$var_mysql$type_mysql_lower process not running."
+        return
+    fi
+
+    pstree_pid "$mysqld_safe_pid"
+    if test "0" != "pstree_pid_res"; then
+        watch_res="$pstree_pid_res"
+    fi
+
+    pid_no="$mysqld_safe_pid-$pid_no"
+}
+
+watch_cron_etc ()
+{
+    watch_res="0"
+
+    _tmp_diff_cron_etc=`diff $PATH_ETC/em_cron.cf $PATH_EM_CROND`
+
+    if ! test -f "$PATH_EM_CROND"; then
+        watch_res="can not find $PATH_EM_CROND"
+        return
+    fi
+
+    if ! test -f "$PATH_ETC/em_cron.cf"; then
+        watch_res="can not find em_cron.cf"
+        return
+    fi
+
+    if test "$_tmp_diff_cron_etc"; then
+        watch_res="$PATH_EM_CROND need update"
+        return
+    fi
+
+    pid_no="$PATH_EM_CROND is ok"
+    watch_tree=""
+}
+
+watch_proc ()
+{
+    array_watch_common=(
+        kav
+        mproxy
+        mproxy_index
+        mproxy_log
+        httpd
+        nginx
+        memcache_session
+        memcache_fix
+        memcache_hot
+        gearman
+        crtmpd
+        phpd
+        syslog
+        filed
+        filedagent
+        filedrepd
+        bounce
+        local
+        remote
+        mlist
+        smtp
+        pop
+        imap
+        virusd
+        antivirus
+        cleanup
+    )
+
+    t_proc_name_watch="$1"
+
+    # 检查是否是标准的检查项目
+    is_in_common=""
+    for j in "${array_watch_common[@]}"; do
+        if test "$j" = "$t_proc_name_watch"; then
+            is_in_common="yes"
+            break
+        fi
+    done
+
+    # 如果是标准的检查项目, 则执行标准检查, 否则调用单独的检查函数
+    if test "yes" = "$is_in_common"; then
+        pid_var="PIDF_"`echo $t_proc_name_watch | tr a-z A-Z`
+        # example: smtp 1, PIDF_SMTP_1
+        eval "pid_path=\$$pid_var"
+
+        get_pid "$pid_path"
+        if test "0" != "$get_pid_res"; then
+            watch_res="$get_pid_res"
+        else
+            pstree_pid $pid_no
+            if test "0" != "pstree_pid_res"; then
+                watch_res="$pstree_pid_res"
+            fi
+        fi
+    else
+        watch_$t_proc_name_watch
+    fi
+}
+
+process_watch ()
+{
+    t_array_watch_proc_name=( $(echo "$1") )
+    if test "${t_array_watch_proc_name[1]}"; then
+        t_proc_name_watch="${t_array_watch_proc_name[0]}"
+        t_proc_num_watch="${t_array_watch_proc_name[1]}"
+    else
+        t_proc_name_watch="$1"
+        t_proc_num_watch=""
+    fi
+
+    check_res=`check_proc_disp_name "$t_proc_name_watch"`
+    if test "0" = "$check_res"; then
+        usage
+        exit_val=127
+        return
+    elif test "2" = "$check_res"; then
+        echo_stdout -e "Watching $t_proc_name_watch processes ...\n"
+        array_watch_disp_name_format=("$t_proc_name_watch")
+    else
+        echo_stdout -e "Watching all processes ...\n"
+        array_watch_disp_name_format=(${array_watch_disp_name[@]});
+    fi
+
+    echo_stdout -e "Result:\n$ECHO_LINE"
+
+    max_len=`get_max_len ${array_watch_disp_name_format[@]}`
+    sp_pad=`printf "%-${max_len}s           " " "`
+    watch_error_name=""
+
+    for i in "${array_watch_disp_name_format[@]}"; do
+        restore_stdout
+        printf "%-${max_len}s  " "$i"
+        reassign_stdout
+
+        watch_proc "$i" "$t_proc_num_watch"
+
+        if test "0" = "$watch_res"; then
+            sp_pad_pid_no=`echo "$pid_no" | sed "s/[0-9-]/ /g"`
+            sed_replace=`echo "$sp_pad_pid_no$sp_pad" | sed 's/\//\\\\\//g'`
+            watch_tree=`echo -e "$watch_tree" | sed "s/^ /$sed_replace/g"`
+            echo_stdout -e "[$ECHO_OK]  $pid_no  $watch_tree"
+        else
+            watch_error_name="$watch_error_name,"`get_proc_name $i`
+            exit_val=1
+
+            if test "1" = "$watch_res"; then
+                echo_stdout -e "[$ECHO_FAIL]  can't find pid file."
+            elif test "2" = "$watch_res"; then
+                echo_stdout -e "[$ECHO_FAIL]  pid file error."
+            elif test "3" = "$watch_res"; then
+                echo_stdout -e "[$ECHO_FAIL]  process not running."
+            else
+                echo_stdout -e "[$ECHO_FAIL]  $watch_res"
+            fi
+        fi
+    done
+
+    echo_stdout "$ECHO_LINE"
+
+    if ! test -z "$watch_error_name";then
+        watch_error_name=${watch_error_name/,/}
+
+        echo_stdout -e "\nFailing process status:\n$ECHO_LINE"
+        restore_stdout
+        ps -C "$watch_error_name" -o pid,ppid,cmd
+        reassign_stdout
+        echo_stdout "$ECHO_LINE"
+    fi
+}
+
+
+# }}}
+
+# {{{ start and stop functions
+
+init_start_var ()
+{
+    # 启动成功: 0 | 已经启动, 在运行中: 2 | 其他: 3
+    init_res=0
+    init_msg=""
+}
+
+# 初始化变量
+init_start_var
+
+start_mysql ()
+{
+    start_mysql_base
+}
+
+start_mysql_index ()
+{
+    start_mysql_base "_index"
+}
+
+start_mysql_log ()
+{
+    start_mysql_base "_log"
+}
+
+start_mysql51 ()
+{
+    start_mysql_base "" "51"
+}
+
+start_mysql51_index ()
+{
+    start_mysql_base "_index" "51"
+}
+
+start_mysql51_log ()
+{
+    start_mysql_base "_log" "51"
+}
+
+start_mysql55 ()
+{
+    start_mysql_base "" "55"
+}
+
+start_mysql55_index ()
+{
+    start_mysql_base "_index" "55"
+}
+
+start_mysql55_log ()
+{
+    start_mysql_base "_log" "55"
+}
+
+start_mysql56 ()
+{
+    start_mysql_base "" "56"
+}
+
+start_mysql56_index ()
+{
+    start_mysql_base "_index" "56"
+}
+
+start_mysql56_log ()
+{
+    start_mysql_base "_log" "56"
+}
+
+start_mysql_base ()
+{
+    init_res=0
+    init_msg=""
+    type_mysql="$1"
+    var_mysql="$2"
+
+    CMD_MYSQL_START="$CMD_SUDO_EYOU ./bin/mysqld_safe --defaults-file=$PATH_ETC/mysql/my$type_mysql.cnf &"
+    CMD_MYSQL_PING="./bin/mysqladmin --defaults-file=$PATH_ETC/mysql/my$type_mysql.cnf ping"
+
+    watch_proc mysql$var_mysql$type_mysql
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    if ! cd $PATH_OPT_MYSQL$var_mysql; then
+        init_res=3
+        return
+    fi
+
+    eval $CMD_MYSQL_START
+    let "init_res = 0 || $?"
+
+    # 每隔 1 秒 ping 一下, 直到 ping 通或者超时
+    sleep_time=1
+    res_ping=1
+    t_len_timeout="${#MYSQL_START_TIMEOUT}"
+    t_pad_str_back=`seq $t_len_timeout | xargs -i echo -n "\x08"`"\x08\x08"
+    t_pad_str_sp=`printf "%${t_len_timeout}s  " " "`
+
+    # 在启动之后输出的信息
+    start_out_last=""
+
+    restore_stdout
+    printf "%-${t_len_timeout}ss " "$MYSQL_START_TIMEOUT"
+    reassign_stdout
+    let "left_time = $MYSQL_START_TIMEOUT - 1"
+
+    while test 0 != "$res_ping"; do
+        sleep 1
+
+        eval $CMD_MYSQL_PING
+        res_ping=$?
+
+        let "sleep_time += 1"
+        start_out_last="  (${sleep_time}s)"
+
+        echo_stdout -ne "$t_pad_str_back"
+        restore_stdout
+        printf "%-${t_len_timeout}ss " "$left_time"
+        reassign_stdout
+
+        let "left_time = $MYSQL_START_TIMEOUT - $sleep_time"
+        if test $sleep_time -gt $MYSQL_START_TIMEOUT; then
+            echo_stdout -ne "$t_pad_str_back$t_pad_str_sp$t_pad_str_back"
+            start_out_last=""
+            init_res=3
+            init_msg="mysql$var_mysql$type_mysql starting timeout. more than ${MYSQL_START_TIMEOUT}s."
+            return
+        fi
+    done
+
+    cd $PATH_PWD
+    sleep 1
+
+    echo_stdout -ne "$t_pad_str_back$t_pad_str_sp$t_pad_str_back"
+}
+
+start_mproxy ()
+{
+    start_mproxy_base
+}
+
+start_mproxy_index ()
+{
+    start_mproxy_base "_index" "_INDEX"
+}
+
+start_mproxy_log ()
+{
+    start_mproxy_base "_log" "_LOG"
+}
+
+start_mproxy_base ()
+{
+    init_res=0
+    init_msg=""
+    type_mproxy_lower="$1"
+    type_mproxy_upper="$2"
+
+    watch_proc mproxy$type_mproxy_lower
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    eval "t_mproxy_listen=\"\$MPROXY${type_mproxy_upper}_LISTEN\""
+    eval "t_mproxy_backend=\"\$MPROXY${type_mproxy_upper}_BACKEND\""
+
+    $CMD_SUDO_EYOU $PATH_OPT_MPROXY/bin/mysql-proxy \
+        --keepalive \
+        --log-level=message \
+        --log-backtrace-on-crash \
+        --proxy-pool-no-change-user \
+        --basedir=$PATH_OPT_MPROXY \
+        --pid-file=$PATH_RUN/em_mproxy$type_mproxy_lower.pid \
+        --log-file=$PATH_LOG/mproxy/mproxy$type_mproxy_lower.log \
+        --proxy-lua-script=$PATH_ETC/mproxy/mta_pooling.lua \
+        --proxy-address=$t_mproxy_listen \
+        --proxy-backend-addresses=$t_mproxy_backend \
+        --daemon
+    let "init_res = 0 || $?"
+}
+
+start_memcache_session ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc memcache_session
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    if test "$MEMCACHE_SESSION_LISTEN"; then
+        _tmp_mems_arg_listen="-l $MEMCACHE_SESSION_LISTEN"
+    else
+        _tmp_mems_arg_listen=""
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT_BIN/memcached \
+        -p $MEMCACHE_SESSION_PORT \
+        $_tmp_mems_arg_listen \
+        -u $EXEC_USER \
+        -m $MEMCACHE_SESSION_MEM \
+        -c $MEMCACHE_SESSION_CONS \
+        -P $PIDF_MEMCACHE_SESSION \
+        -d
+    let "init_res = 0 || $?"
+}
+
+start_memcache_fix ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc memcache_fix
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    if test "$MEMCACHE_FIX_LISTEN"; then
+        _tmp_memf_arg_listen="-l $MEMCACHE_FIX_LISTEN"
+    else
+        _tmp_memf_arg_listen=""
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT_BIN/memcached \
+        -p $MEMCACHE_FIX_PORT \
+        $_tmp_memf_arg_listen \
+        -u $EXEC_USER \
+        -m $MEMCACHE_FIX_MEM \
+        -c $MEMCACHE_FIX_CONS \
+        -P $PIDF_MEMCACHE_FIX \
+        -d
+    let "init_res = 0 || $?"
+
+    init_member_key
+    let "init_res = 0 || $?"
+}
+
+init_member_key ()
+{
+    sleep 1
+    echo_stdout -n "Sync cache -> "
+
+    restore_stdout
+    $CMD_SUDO_EYOU $PATH_SBIN/em_init_member_key_cache
+    __tmp_res=$?
+    reassign_stdout
+
+    echo_stdout -n " "
+    return $__tmp_res
+}
+
+start_memcache_hot ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc memcache_hot
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    if test "$MEMCACHE_HOT_LISTEN"; then
+        _tmp_memh_arg_listen="-l $MEMCACHE_HOT_LISTEN"
+    else
+        _tmp_memh_arg_listen=""
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT_BIN/memcached \
+        -p $MEMCACHE_HOT_PORT \
+        $_tmp_memh_arg_listen \
+        -u $EXEC_USER \
+        -m $MEMCACHE_HOT_MEM \
+        -c $MEMCACHE_HOT_CONS \
+        -P $PIDF_MEMCACHE_HOT \
+        -d
+    let "init_res = 0 || $?"
+}
+
+start_crtmpd ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc crtmpd
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT_SBIN/crtmpserver \
+        --uid=$EXEC_UID \
+        --gid=$EXEC_GID \
+        --pid=$PIDF_CRTMPD \
+        --daemon \
+        $PATH_ETC/crtmpserver/crtmpserver.lua
+    let "init_res = 0 || $?"
+}
+
+start_nginx ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc nginx
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $PATH_OPT_SBIN/nginx
+    let "init_res = 0 || $?"
+}
+
+start_httpd ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc httpd
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT_BIN/apachectl -f $PATH_ETC/httpd/conf/httpd.conf -k start
+    let "init_res = 0 || $?"
+}
+
+start_gearman ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc gearman
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    if test "$GEARMAN_LISTEN"; then
+        _tmp_gearman_arg_listen="-L $GEARMAN_LISTEN"
+    else
+        _tmp_gearman_arg_listen=""
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT_SBIN/gearmand \
+        $_tmp_gearman_arg_listen \
+        -p $GEARMAN_PORT \
+        -P $PIDF_GEARMAN \
+        --log-file=$PATH_LOG/gearman/gearman.log \
+        --queue-type=libdrizzle \
+        --libdrizzle-host=$GEARMAN_MYSQL_HOST \
+        --libdrizzle-port=$GEARMAN_MYSQL_PORT \
+        --libdrizzle-user=$GEARMAN_MYSQL_USER \
+        --libdrizzle-password="$GEARMAN_MYSQL_PW" \
+        --libdrizzle-db=eyou_mail \
+        --libdrizzle-table=gearman_queue \
+        --libdrizzle-mysql \
+        -d &
+    let "init_res = 0 || $?"
+
+    sleep 1
+}
+
+start_kav ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc kav
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_OPT/kav/bin/kavehostctl start
+    let "init_res = 0 || $?"
+}
+
+start_syslog ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc syslog
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_syslogd
+    let "init_res = 0 || $?"
+}
+
+start_phpd ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc phpd
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU nohup $PATH_BIN/em_phpd 2>&1 | $PATH_OPT_SBIN/cronolog $PATH_LOG_STDOUT/archive/%Y%m/em_phpd_%Y%m%d.out &
+    let "init_res = 0 || $?"
+
+    sleep 3
+}
+
+start_filed ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc filed
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_filed
+    let "init_res = 0 || $?"
+}
+
+start_filedagent ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc filedagent
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_filedagent
+    let "init_res = 0 || $?"
+}
+
+start_filedrepd ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc filedrepd
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_filedrepd
+    let "init_res = 0 || $?"
+}
+
+start_bounce ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc bounce
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_bounce
+    let "init_res = 0 || $?"
+}
+
+start_local ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc local
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_local
+    let "init_res = 0 || $?"
+}
+
+start_remote ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc remote
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_remote
+    let "init_res = 0 || $?"
+}
+
+start_mlist ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc mlist
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_mlist
+    let "init_res = 0 || $?"
+}
+
+start_smtp ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc smtp
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $PATH_BIN/em_smtpd
+    let "init_res = 0 || $?"
+}
+
+start_pop ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc pop
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $PATH_BIN/em_pop3d
+    let "init_res = 0 || $?"
+}
+
+start_imap ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc imap
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $PATH_BIN/em_imapd
+    let "init_res = 0 || $?"
+}
+
+start_virusd ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc virusd
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_virusd
+    let "init_res = 0 || $?"
+}
+
+start_antivirus ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc antivirus
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_antivirus
+    let "init_res = 0 || $?"
+}
+
+start_cleanup ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc cleanup
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    $CMD_SUDO_EYOU $PATH_BIN/em_cleanup -d
+    let "init_res = 0 || $?"
+}
+
+start_cron_etc ()
+{
+    init_res=0
+    init_msg=""
+
+    watch_proc cron_etc
+    if test "0" = "$watch_res"; then
+        init_res=2
+        return
+    fi
+
+    cp $PATH_ETC/em_cron.cf $PATH_EM_CROND
+    let "init_res = 0 || $?"
+}
+
+stop_proc ()
+{
+    array_stop_common=(
+        mproxy
+        mproxy_index
+        mproxy_log
+        memcache_session
+        memcache_fix
+        memcache_hot
+        gearman
+        crtmpd
+        phpd
+        syslog
+        filed
+        filedagent
+        filedrepd
+        bounce
+        local
+        remote
+        mlist
+        smtp
+        pop
+        imap
+        antivirus
+        virusd
+        cleanup
+    )
+
+    t_proc_name_stop="$1"
+
+    # 检查是否是标准的 stop 项目
+    is_in_common=""
+    for j in "${array_stop_common[@]}"; do
+        if test "$j" = "$t_proc_name_stop"; then
+            is_in_common="yes"
+            break
+        fi
+    done
+
+    # 如果是标准的 stop 项目, 则执行标准 stop, 否则调用单独的 sotp 函数
+    if test "yes" = "$is_in_common"; then
+        init_res=0
+        init_msg=""
+
+        pid_var="PIDF_"`echo $t_proc_name_stop | tr a-z A-Z`
+        eval "pid_path=\$$pid_var"
+
+        if ! test -e "$pid_path"; then
+            init_res=1
+            return $init_res
+        fi
+
+        t_pid_num=`head -n 1 $pid_path`
+        if ! test "$t_pid_num"; then
+            init_res=1
+            return $init_res
+        fi
+
+        kill $t_pid_num
+        let "init_res = 0 || $?"
+
+        return $init_res
+    else
+        stop_$t_proc_name_stop
+        return $?
+    fi
+}
+
+stop_cron_etc ()
+{
+    init_res=0
+    init_msg=""
+
+    rm -f $PATH_EM_CROND
+    let "init_res = 0 || $?"
+
+    return $init_res
+}
+
+stop_kav ()
+{
+    init_res=0
+    init_msg=""
+
+    $CMD_SUDO_EYOU $PATH_OPT/kav/bin/kavehostctl stop
+    let "init_res = 0 || $?"
+}
+
+stop_httpd ()
+{
+    init_res=0
+    init_msg=""
+
+    $CMD_SUDO_EYOU $PATH_OPT_BIN/apachectl -f $PATH_ETC/httpd/conf/httpd.conf -k stop
+    let "init_res = 0 || $?"
+}
+
+stop_nginx ()
+{
+    init_res=0
+    init_msg=""
+
+    $PATH_OPT_SBIN/nginx -s stop
+    let "init_res = 0 || $?"
+}
+
+stop_mysql ()
+{
+    stop_mysql_base
+}
+
+stop_mysql_index ()
+{
+    stop_mysql_base "_index"
+}
+
+stop_mysql_log ()
+{
+    stop_mysql_base "_log"
+}
+
+stop_mysql51 ()
+{
+    stop_mysql_base "" "51"
+}
+
+stop_mysql51_index ()
+{
+    stop_mysql_base "_index" "51"
+}
+
+stop_mysql51_log ()
+{
+    stop_mysql_base "_log" "51"
+}
+
+stop_mysql55 ()
+{
+    stop_mysql_base "" "55"
+}
+
+stop_mysql55_index ()
+{
+    stop_mysql_base "_index" "55"
+}
+
+stop_mysql55_log ()
+{
+    stop_mysql_base "_log" "55"
+}
+
+stop_mysql56 ()
+{
+    stop_mysql_base "" "56"
+}
+
+stop_mysql56_index ()
+{
+    stop_mysql_base "_index" "56"
+}
+
+stop_mysql56_log ()
+{
+    stop_mysql_base "_log" "56"
+}
+
+stop_mysql_base ()
+{
+    init_res=0
+    init_msg=""
+    type_mysql="$1"
+    var_mysql="$2"
+
+    CMD_MYSQL_STOP="./bin/mysqladmin --defaults-file=$PATH_ETC/mysql/my$type_mysql.cnf shutdown"
+
+    if ! cd $PATH_OPT_MYSQL$var_mysql; then
+        init_res=1
+        return
+    fi
+    eval $CMD_MYSQL_STOP
+    let "init_res = 0 || $?"
+    cd $PATH_PWD
+    sleep 1
+
+    return $init_res
+}
+
+chown_run ()
+{
+    chown $EXEC_USER:$EXEC_GROUP $PATH_RUN/*
+}
+
+start ()
+{
+    check_res=`check_proc_disp_name "$1"`
+    if test "0" = "$check_res"; then
+        usage
+        exit_val=127
+        return
+    elif test "2" = "$check_res"; then
+        echo_stdout -e "Starting $1 processes ...\n"
+        array_start_format=("$1");
+    else
+        echo_stdout -e "Starting all processes ...\n"
+        array_start_format=(${ARRAY_START[@]});
+    fi
+
+    max_len=`get_max_len ${array_start_format[@]}`
+
+    for i in "${array_start_format[@]}"; do
+        restore_stdout
+        printf "Starting %-${max_len}s  " "$i"
+        reassign_stdout
+
+        # 在启动之后输出的信息
+        start_out_last=""
+        start_$i
+
+        if test 0 = $init_res; then
+            echo_stdout -e "[$ECHO_OK]$start_out_last"
+        elif test 2 = $init_res; then
+            exit_val=1
+            echo_stdout -e "[$ECHO_FAIL]$start_out_last  $i (pid $pid_no) already running"
+        else
+            exit_val=1
+            echo_stdout -e "[$ECHO_FAIL]$start_out_last  $init_msg"
+        fi
+    done
+
+    sleep 2
+
+    echo_stdout -e "\nAll done"
+}
+
+stop ()
+{
+    check_res=`check_proc_disp_name "$1"`
+    if test "0" = "$check_res"; then
+        usage
+        exit_val=127
+        return
+    elif test "2" = "$check_res"; then
+        echo_stdout -e "Stopping $1 processes ...\n"
+        array_stop_format=("$1");
+    else
+        echo_stdout -e "Stopping all processes ...\n"
+        array_stop_format=(${ARRAY_STOP[@]});
+    fi
+
+    max_len=`get_max_len ${array_stop_format[@]}`
+
+    for i in "${array_stop_format[@]}"; do
+        restore_stdout
+        printf "Stopping %-${max_len}s  " "$i"
+        reassign_stdout
+        stop_proc "$i"
+        if test 0 = $init_res; then
+            echo_stdout -e "[$ECHO_OK]"
+        else
+            exit_val=1
+            echo_stdout -e "[$ECHO_FAIL]  $init_msg"
+        fi
+    done
+
+    sleep 1
+
+    echo_stdout -e "\nAll done"
+}
+
+stops ()
+{
+    ARRAY_STOP=(${ARRAY_STOP[@]##mysql*})
+    ARRAY_STOP=(${ARRAY_STOP[@]##mproxy*})
+    ARRAY_STOP=(${ARRAY_STOP[@]##memcache*})
+    ARRAY_STOP=(${ARRAY_STOP[@]##gearman*})
+    stop $1
+}
+
+# }}}
+
+ARG1="$1"
+ARG2="$2"
+
+if test "$ARG2" = "start" -o "$ARG2" = "stop" -o "$ARG2" = "watch"; then
+    ARG1="$2"
+    ARG2="$1"
+fi
+
+chown_run
+
+case "$ARG1" in
+    watch)
+        log_begin watch
+        process_watch "$ARG2"
+        log_end watch
+    ;;
+    start)
+        log_begin start
+        start "$ARG2"
+        exit_val_tmp="$exit_val"
+        echo_stdout ""
+        process_watch "$ARG2"
+        log_end start
+        exit_val="$exit_val_tmp"
+    ;;
+    stop)
+        log_begin stop
+        stop "$ARG2"
+        exit_val_tmp="$exit_val"
+        echo_stdout ""
+        process_watch "$ARG2"
+        log_end stop
+        exit_val="$exit_val_tmp"
+    ;;
+    stops)
+        log_begin stops
+        stops "$ARG2"
+        exit_val_tmp="$exit_val"
+        echo_stdout ""
+        process_watch "$ARG2"
+        log_end stops
+        exit_val="$exit_val_tmp"
+    ;;
+    *)
+        usage
+        exit_val=127
+    ;;
+esac
+
+exit $exit_val
