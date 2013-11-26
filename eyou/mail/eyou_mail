@@ -64,7 +64,7 @@ PATH_OPT_CRTMPD="$PATH_OPT/crtmpd"
 PATH_INITLOG="$PATH_LOG/init.out"
 PATH_EM_CROND="/etc/cron.d/eyou_mail"
 PATH_CONFIG="$PATH_ETC/em_init_config"
-PATH_PWD="/home/eyou"
+PATH_PWD="/usr/local/eyou"
 
 PIDF_MYSQL="$PATH_RUN/em_mysql.pid"
 PIDF_MYSQL_INDEX="$PATH_RUN/em_mysql_index.pid"
@@ -164,7 +164,7 @@ fi
 #fi
 
 # 置标准输出和标准错误输出
-reassign_errout
+#reassign_errout
 reassign_stdout
 
 echo_stdout ()
@@ -1554,11 +1554,13 @@ fi
 
 chown_run
 
+
 case "$ARG1" in
     watch)
         log_begin watch
         process_watch "$ARG2"
         exit_val_tmp="$exit_val"
+        echo_stdout ""
         log_end watch
         exit_val="$exit_val_tmp"
     ;;
