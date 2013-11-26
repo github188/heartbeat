@@ -153,6 +153,7 @@ start_check () {
 if [ "$(find $EYOU_TMP_lgp_DIR/[Master,Slave]* -type f -name "$(basename ${CHECK_DISK_SCAN_CONF})" -o -name "$(basename ${EYOU_SER_FILE_CONF})"|wc -l)" != "0" ];then
 	send_email_start
 	[ -f $CHECK_DISK_SCAN_CONF ] && cat $CHECK_DISK_SCAN_CONF >> $SEND_EMAILFILE_CONF
+	[ -f $(echo $CHECK_DISK_SCAN_CONF|sed 's/Master_/Slave_/g') ] && cat $(echo $CHECK_DISK_SCAN_CONF|sed 's/Master_/Slave_/g') >> $SEND_EMAILFILE_CONF
 #	[ -f $CHECK_EAMILFILE_CONF ] && cat $CHECK_EAMILFILE_CONF >> $SEND_EMAILFILE_CONF
 #	[ -f $SEND_EMAILFILE_CONF ] && cat $SEND_EMAILFILE_CONF
 	[ -f "$EYOU_SER_FILE_CONF" ] && cat "$EYOU_SER_FILE_CONF" >> $SEND_EMAILFILE_CONF
