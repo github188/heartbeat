@@ -68,10 +68,13 @@ crm configure primitive pingd ocf:pacemaker:ping params host_list=$HA_PING_GW mu
 eyou_crm () {
 for i in ${ARRAY_START[@]}
 do
+	[[ "$i" =~ "cron_etc" ]] && {
+	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s"
+	} || {
 	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s meta migration-threshold=5 resource-stickiness=10 "
+	}
 done
-#crm_group=$(for i in ${ARRAY_START[@]};do echo eyou_$i;done)
-#	echo crm configure group eyou_group $crm_group >> ./crmsh
+
 echo '
 crm configure primitive send_email lsb:eyou_check_sendemail \
         op monitor interval="30s" timeout="60s"
@@ -99,19 +102,7 @@ crm configure location eyou_check_network_l eyou_check_clone \
 crm configure location eyou_ping_l eyou_mail_vip \
         rule -inf: not_defined pingd or pingd lte 0
 '
-#if [ "$DISK_NUM" == "1" ];then
-#echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_disk_${DISK_NUM} eyou_check_disk"
-#else
-#EYOU_MOUNT_DISK=$(for i in `seq $DISK_NUM`;do echo eyou_mount_disk_${i}; done)
-#echo "crm configure colocation eyou_disk_colo inf: "${EYOU_MOUNT_DISK}
-#echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_disk_${DISK_NUM} eyou_check_disk"
-#fi
 
-
-#lgp_mod_2013-11-26
-#echo '
-#crm configure colocation eyou_group_colo inf: eyou_check_disk eyou_syslog eyou_mysql eyou_mysql_index eyou_mysql_log eyou_mproxy eyou_mproxy_index eyou_memcache_session eyou_memcache_fix eyou_memcache_hot eyou_gearman eyou_phpd eyou_crtmpd eyou_filed eyou_filedagent eyou_httpd eyou_nginx eyou_bounce eyou_local eyou_remote eyou_mlist eyou_smtp eyou_pop eyou_imap eyou_cleanup eyou_cron_etc send_email
-#'
 
 
 if [ "$DISK_NUM" == "1" ] && [ "$DISK_TYPE" == "ext" ];then
@@ -142,13 +133,11 @@ elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "ext" ];then
 		done
 	elif [ "$DISK_NUM" == "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs =1"
-#		echo "crm configure order eyou_mount_after inf: eyou_mount_disk_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
 		echo "crm configure order eyou_mount_after inf: eyou_mount_clone_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
 	elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs gt 1"
 		for i in `seq $DISK_NUM`
 		do
-#		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_disk_${i} eyou_check_disk eyou_mail_vip"
 		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_clone_${i} eyou_check_disk eyou_mail_vip"
 		done
 	else
