@@ -24,9 +24,11 @@ eyou_start () {
 	if [ "$exit_val" == "0" ];then
 	echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME start [ 启动成功 ] [ OK ]" >>$EYOU_SER_FILE_CONF
 	exit_val=0
+	wait
 	else
 	echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME start [ 启动失败 ] [ ERROR ]" >>$EYOU_SER_FILE_CONF
 	exit_val=1
+	wait
 	fi
 	
 }
@@ -38,11 +40,13 @@ eyou_status () {
 		}
 	if [ "$EYOU_SYS_NAME" != "cron_etc" ];then
 	pid_number=$(sed -n '1p' $EYOU_SYS_PID_FILE)
+	wait
 	[ -z $pid_number ] && {
 		echo "$DATE_MESS $(hostname) 未读取到进程的 PID [ $EYOU_SYS_NAME ]" >>${EYOU_SER_FILE_CONF} 
 		exit 1
 		}
 	pid_pstree_name=$(pstree $pid_number|awk -F '--' '{print $1}'|sed -n 1p)
+	wait
 	[ -z $pid_pstree_name ] && {
 		echo "$DATE_MESS $(hostname) 未查找到 $pid_number 进程号对应的程序 [ $EYOU_SYS_NAME ] " >>${EYOU_SER_FILE_CONF} 
 		exit 1
@@ -61,6 +65,7 @@ eyou_status () {
 		if [[ "$EYOU_SYS_NAME" =~ "mysql" ]];then
 			$EYOU_MAIL watch $EYOU_SYS_NAME >/dev/null 2>&1
 			exit_val=$?
+			wait
 			[ $exit_val -eq 0 ] || echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME eyou_mail_watch 失败" >>${EYOU_SER_FILE_CONF}
 		fi
 	else
@@ -73,7 +78,9 @@ eyou_stop () {
 #	if $EYOU_MAIL stop $EYOU_SYS_NAME >/dev/null 2>&1;then
 	$EYOU_MAIL stop $EYOU_SYS_NAME >/dev/null 2>&1
 	exit_val=$?
+	wait
 	while [ "$exit_val" == "" ];do $EYOU_MAIL stop $EYOU_SYS_NAME > /dev/null 2>&1;exit_val=$?;done
+	wait
 	if [ "$exit_val" == "0" ];then
 #			SYS_PID_NUM=$(tail -1 $EYOU_SYS_PID_FILE)
 #			ps -ef |grep _${$EYOU_SYS_NAME} 
@@ -84,13 +91,16 @@ eyou_stop () {
 					:
 				else
 					$EYOU_MAIL watch $EYOU_SYS_NAME |grep \/|awk '{print $1}'|xargs kill -9 
+					wait
 				fi
 			fi
 	echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME stop [ 停止成功 ] [ OK ]" >>$EYOU_SER_FILE_CONF
 	[ -f $EYOU_SYS_PID_FILE ] && rm -rf $EYOU_SYS_PID_FILE
+	wait
 	exit_val=0
 	else
 	echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME stop [ 停止失败 ] [ ERROR ]" >>$EYOU_SER_FILE_CONF
+	wait
 	exit_val=1
 	fi
 
