@@ -1,10 +1,10 @@
-d2824a3fcbedf31382c9b694f8ad67d7  ./eyou_ha_version1.0/crmsh/init_create_crmsh_disk
-cc71d3dff8c2ff34009aa0898175ca1a  ./eyou_ha_version1.0/crmsh/init_create_crmsh.ini
+beaeecf2ea53d4cf3c023c579d503b44  ./eyou_ha_version1.0/crmsh/init_create_crmsh
+0db5b4347c1deace95ce83c7058a70c1  ./eyou_ha_version1.0/crmsh/init_create_crmsh.ini
 2ae6f36c1b163d3e142ebe8b402c2d7f  ./eyou_ha_version1.0/eyou_mail_shell/init_create_shell
-988b257742f7d0d1393ed099499805c3  ./eyou_ha_version1.0/eyou_mail_shell/eyou_mail_mysql
+64e392d6ef5138b370380e290b85c649  ./eyou_ha_version1.0/eyou_mail_shell/eyou_mail_mysql
 cd36686c97627c75079d1853b8bf49de  ./eyou_ha_version1.0/readme
 7b941fd27abeec448d7027e4a351a5e3  ./eyou_ha_version1.0/check_send/eyou_check_disk
-77c451b258d131323fb2e2e9619701a5  ./eyou_ha_version1.0/check_send/eyou_check_sendemail
+0f3c61ed1ffd04dae6209b9a33541cb4  ./eyou_ha_version1.0/check_send/eyou_check_sendemail
 0b7dc15073585cef68748ba986c8140c  ./eyou_ha_version1.0/check_send/eyou_check_network
 c321e534348f9f0198eb9edfd96eb773  ./eyou_ha_version1.0/sendEmail-v1.56/eyou_check_disk_nfs
 af4b2d8947926f939f613021919ad2ec  ./eyou_ha_version1.0/sendEmail-v1.56/CHANGELOG
@@ -15,5 +15,5 @@ b6516f70d13bf7a40fb2e7fb5db48954  ./eyou_ha_version1.0/sendEmail-v1.56/init_eyou
 5388a323ab204d11ebe5b711127d473d  ./eyou_ha_version1.0/sendEmail-v1.56/sendEmail.pl
 d0195a73922c6b2f8c38c19c4fca729b  ./eyou_ha_version1.0/sendEmail-v1.56/eyou_check_disk_not_nfs
 d6126501cf76dbef630e6195e6fbf7e6  ./eyou_ha_version1.0/sendEmail-v1.56/eyou_ssh_expect
-5a3e0d76e3404db04394dc628a2e9475  ./eyou_ha_version1.0/sendEmail-v1.56/sendemail.ini
+5c65d12375e9c95da90b94cf63f04220  ./eyou_ha_version1.0/sendEmail-v1.56/sendemail.ini
 db3e177f6a1773d747b05b309f8d115c  ./eyou_ha_version1.0/sendEmail-v1.56/check_master_slave
