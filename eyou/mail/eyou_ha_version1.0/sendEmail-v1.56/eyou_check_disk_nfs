@@ -2,9 +2,6 @@
 #by liguopeng email:liguopeng@eyou.net
 #by zh_CN.UTF8
 SENDMAIL_FILE="/usr/local/eyou/mail/sendEmail-v1.56"
-#SENDMAIL_CONF="$SENDMAIL_FILE/sendemail.ini"
-#引入配置文件
-#[ -f $SENDMAIL_CONF ] && . $SENDMAIL_CONF || exit 1
 pid_name="$(basename $0).pid"
 [ -f $SENDMAIL_FILE/check_master_slave ] && . $SENDMAIL_FILE/check_master_slave || exit 1
 
@@ -19,7 +16,6 @@ fi
 
 #获取当前时间戳,并且制定check格式
 CHECK_TIME () {
-#date +%H%M%S
 echo "1 $(date +%s)"
 }
 
@@ -27,14 +23,8 @@ echo "1 $(date +%s)"
 #扫描使用ha自动挂载的硬盘
 disk_scan () {
 
-#crm configure show xml|grep device |awk '{print $3}'|cut -d '"' -f2 
-#crm configure show xml |grep name=\"device\"|grep "[0-9]\{1,3\}\.\{1,3\}"|awk 'BEGIN { FS="value=" } {print $2}'|cut -d '"' -f2
 crm configure show|awk 'BEGIN { FS="device=" } {print $2}'|grep \"nfs\" |cut -d '"' -f2 && exit_val=0 || exit_val=1
-#exit_val=$?
-#while [ "$exit_val" == "" ];do crm configure show|awk 'BEGIN { FS="device=" } {print $2}'|grep \"nfs\" |cut -d '"' -f2;exit_val=$?;done
 while [ "$exit_val" == "" ];do crm configure show|awk 'BEGIN { FS="device=" } {print $2}'|grep \"nfs\" |cut -d '"' -f2 && exit_val=0 || exit_val=1;done
-#DISK_FILE="/data"
-#CHECK_FILE="$DISK_FILE/.eyou_check_disk_time"
 if [ $? -eq 0 ];then
 	exit_val=0
 else
@@ -47,7 +37,6 @@ fi
 check_disk_mount () {
 disk_scan
 disk_scan_path=$(disk_scan)
-#echo $disk_scan_path
 if [ "$exit_val" != "0" ];then
 	disk_scan_path=$(disk_scan)
 	[ "$exit_val" != "0" ] && exit $exit_val
@@ -71,7 +60,6 @@ start_check () {
 check_disk_mount
 
 #使用循环检测文件是否存在 存在等待再次检测 如存在 并检查文件变动 退出
-#for i in $(disk_scan)
 for i in $disk_scan_path
 	do
 DISK_FILE=$(mount -l |awk '{if($1 == "'$i'") {print $3}}')
@@ -81,9 +69,8 @@ if [ -f $CHECK_FILE ]
 	then
 	if [ "$(grep [0-9] $CHECK_FILE|awk '{print $1}')" != "1" ];then CHECK_TIME > $CHECK_FILE 2>/dev/null;until [ -f $CHECK_FILE ];do CHECK_TIME > $CHECK_FILE 2>/dev/null;done ;echo "$(hostname) $(date +%'F %H:%M:%S') $CHECK_FILE 内容非标准 跳过检查 ，将执行eyou服务启动动作">> $CHECK_DISK_SCAN_CONF; exit_val=0; else exit_val=1;fi
 	if [ $exit_val == "1" ];then
-#	check_time_disk=$(crm configure show xml |grep eyou_check_disk|grep monitor|awk -F'=' '{print $3}'|cut -d \" -f2|grep -io "[0-9]\{1,3\}"|head -1)
 	check_time_disk_1=$(crm configure show xml |grep eyou_check_disk|grep monitor|awk -F'=' '{print $3}'|cut -d \" -f2|grep -io "[0-9]\{1,3\}"|head -1)
-	check_time_disk=$(echo "${check_time_disk_1}"+2|bc)
+	check_time_disk=$(echo "${check_time_disk_1}"+5|bc)
 		cat_disk_1=$(cat $CHECK_FILE)
 		sleep $check_time_disk;wait
 		cat_disk_2=$(cat $CHECK_FILE)
@@ -100,7 +87,6 @@ if [ -f $CHECK_FILE ]
 else
 	CHECK_TIME > $CHECK_FILE 2>/dev/null 
 	until [ -f $CHECK_FILE ];do CHECK_TIME > $CHECK_FILE 2>/dev/null ;done
-#	>$EYOU_SER_FILE
 	echo "$(hostname) $(date +%'F %H:%M:%S') $CHECK_FILE 文件不存在 跳过检查，将执行eyou服务启动动作." >>$CHECK_DISK_SCAN_CONF
 		exit_val=0
 		
@@ -113,13 +99,11 @@ exit $exit_val
 #主机服务启动之后 检测状态时更新文件
 status_check () {
 check_disk_mount
-#for i in $(disk_scan)
 for i in $disk_scan_path
         do
 DISK_FILE=$(mount -l |awk '{if($1 == "'$i'") {print $3}}')
 CHECK_FILE="$DISK_FILE/.eyou_check_disk_time"
 	CHECK_TIME>$CHECK_FILE 2>/dev/null && exit_val=0 || exit_val=1
-#	exit_val=$?
 	until [ -f $CHECK_FILE ];do CHECK_TIME>$CHECK_FILE 2>/dev/null && exit_val=0 || exit_val=1 ;done
 if [ $exit_val -eq 0 ];then
 	exit $exit_val
