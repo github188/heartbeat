@@ -32,27 +32,41 @@ eyou_start () {
 }
 
 eyou_status () {
-#	$EYOU_MAIL watch $EYOU_SYS_NAME >>${EYOU_SER_FILE_CONF}_fail 2>&1
-	[ -f $EYOU_SYS_PID_FILE ] || exit 1
-
-	$EYOU_MAIL watch $EYOU_SYS_NAME >/dev/null 2>&1
-	exit_val=$?
-#	while [ "$exit_val" == "" ];do $EYOU_MAIL watch $EYOU_SYS_NAME > /dev/null 2>&1;exit_val=$?;done
-	if [ "$exit_val" == "0" ];then
-		exit_val=0
-	else
-		echo '======'>>${EYOU_SER_FAIL_FILE_CONF}_${EYOU_SYS_NAME}
-		echo $exit_val >>${EYOU_SER_FAIL_FILE_CONF}_${EYOU_SYS_NAME}
-		echo '======'>>${EYOU_SER_FAIL_FILE_CONF}_${EYOU_SYS_NAME}
-		echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME status fail message... " >> ${EYOU_SER_FAIL_FILE_CONF}_${EYOU_SYS_NAME}
-		$EYOU_MAIL watch $EYOU_SYS_NAME >> ${EYOU_SER_FAIL_FILE_CONF}_${EYOU_SYS_NAME} 2>&1
-		exit_val=$?
-		if [ "$exit_val" != "0" ];then
-			exit_val=1
-			echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME status [ 检测失败 ] [ ERROR ]" >>$EYOU_SER_FILE_CONF
-			$SENDMAIL_FILE/take_snap $EYOU_SYS_NAME >/dev/null 2>&1
+	[ -f $EYOU_SYS_PID_FILE ] || {
+#		echo "$DATE_MESS $(hostname) 未找到PID 文件 [ $EYOU_SYS_NAME ]" >>${EYOU_SER_FILE_CONF} 
+		exit 1
+		}
+	if [ "$EYOU_SYS_NAME" != "cron_etc" ];then
+	pid_number=$(sed -n '1p' $EYOU_SYS_PID_FILE)
+	[ -z $pid_number ] && {
+		echo "$DATE_MESS $(hostname) 未读取到进程的 PID [ $EYOU_SYS_NAME ]" >>${EYOU_SER_FILE_CONF} 
+		exit 1
+		}
+	pid_pstree_name=$(pstree $pid_number|awk -F '--' '{print $1}'|sed -n 1p)
+	[ -z $pid_pstree_name ] && {
+		echo "$DATE_MESS $(hostname) 未查找到 $pid_number 进程号对应的程序 [ $EYOU_SYS_NAME ] " >>${EYOU_SER_FILE_CONF} 
+		exit 1
+		}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME#m}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME_1%d}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME_1%_index}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME_1%_log}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME_1%_session}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME_1%_fix}
+	EYOU_SYS_NAME_1=${EYOU_SYS_NAME_1%_hot}
+	[[ "$pid_pstree_name" =~ "$EYOU_SYS_NAME_1" ]] && exit_val=0 || {
+		echo "$DATE_MESS $(hostname) $pid_number 进程号对应的程序非本程序 [ $EYOU_SYS_NAME ] " >>${EYOU_SER_FILE_CONF} 
+		exit 1
+		}
+		if [[ "$EYOU_SYS_NAME" =~ "mysql" ]];then
+			$EYOU_MAIL watch $EYOU_SYS_NAME >/dev/null 2>&1
+			exit_val=$?
+			[ $exit_val -eq 0 ] || echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME eyou_mail_watch 失败" >>${EYOU_SER_FILE_CONF}
 		fi
+	else
+		exit 0
 	fi
+
 }
 
 eyou_stop () {
