@@ -65,11 +65,14 @@ eyou_status () {
 		exit 1
 		}
 		if [[ "$EYOU_SYS_NAME" =~ "mysql" ]];then
-			$EYOU_MAIL watch $EYOU_SYS_NAME >/dev/null 2>&1
+			PATH_OPT_MYSQL=$(awk -F '=' '{if($1 == "'PATH_OPT_MYSQL'") {print $2}}' $SENDMAIL_FILE/eyou_mail_pid)
+			PATH_ETC=$(awk -F '=' '{if($1 == "'PATH_ETC'") {print $2}}' $SENDMAIL_FILE/eyou_mail_pid)
+			EYOU_SYS_MYSQL_NAME=${EYOU_SYS_NAME#mysql}
+			$PATH_OPT_MYSQL/bin/mysqladmin --defaults-file=$PATH_ETC/mysql/my${EYOU_SYS_MYSQL_NAME}.cnf ping >/dev/null 2>&1
 			exit_val=$?
 			wait
 			[ $exit_val -eq 0 ] || {
-			echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME eyou_mail_watch 失败" >>${EYOU_SER_FILE_CONF}
+			echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME mysqladmin ping 失败" >>${EYOU_SER_FILE_CONF}
 			$SENDMAIL_FILE/take_snap $EYOU_SYS_NAME >/dev/null 2>&1
 			}
 		fi
