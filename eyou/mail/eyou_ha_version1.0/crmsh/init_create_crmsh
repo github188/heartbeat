@@ -133,9 +133,13 @@ elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "ext" ];then
 		done
 	elif [ "$DISK_NUM" == "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs =1"
+#		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_clone_${DISK_NUM} eyou_check_disk"
 		echo "crm configure order eyou_mount_after inf: eyou_mount_clone_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
 	elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs gt 1"
+		EYOU_MOUNT_DISK=$(for i in `seq $DISK_NUM`;do echo eyou_mount_disk_${i}; done)
+#		echo "crm configure colocation eyou_disk_colo inf: "${EYOU_MOUNT_DISK}
+		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_clone_${DISK_NUM} eyou_check_disk"
 		for i in `seq $DISK_NUM`
 		do
 		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_clone_${i} eyou_check_disk eyou_mail_vip"
@@ -174,6 +178,12 @@ if [[ "${ARRAY_START[@]} " =~ "mproxy " ]];then
 echo '
 crm configure colocation eyou_mproxy_colo inf: eyou_check_disk eyou_mproxy send_email
 crm configure order eyou_mproxy_sendemail inf: eyou_mproxy send_email
+'
+fi
+
+if [[ "${ARRAY_START[@]} " =~ "mproxy_index " ]];then
+echo '
+crm configure colocation eyou_mproxy_index_colo inf: eyou_check_disk eyou_mproxy_index send_email
 crm configure order eyou_mproxy_index_sendemail inf: eyou_mproxy_index send_email
 '
 fi
@@ -241,6 +251,7 @@ crm configure order eyou_crtmpd_sendemail inf: eyou_crtmpd send_email
 fi
 if [[ "${ARRAY_START[@]} " =~ "filedagent " ]];then
 echo '
+crm configure colocation eyou_filedagent_colo inf: eyou_check_disk eyou_filedagent send_email
 crm configure order eyou_filedagent_after inf: eyou_mail_vip eyou_filedagent
 crm configure order eyou_filedagent_sendemail inf: eyou_filedagent send_email
 '

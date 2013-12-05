@@ -46,6 +46,8 @@ eyou_status () {
 		exit 1
 		}
 	pid_pstree_name=$(pstree $pid_number|awk -F '--' '{print $1}'|sed -n 1p)
+	init_pid_pstree="0"
+	while [ -z $pid_pstree_name ];do init_pid_pstree=$(echo ${init_pid_pstree}+1|bc);pid_pstree_name=$(pstree $pid_number|awk -F '--' '{print $1}'|sed -n 1p);[ "$init_pid_pstree" -eq "10" ] && break; done
 	wait
 	[ -z $pid_pstree_name ] && {
 		echo "$DATE_MESS $(hostname) 未查找到 $pid_number 进程号对应的程序 [ $EYOU_SYS_NAME ] " >>${EYOU_SER_FILE_CONF} 
@@ -66,7 +68,10 @@ eyou_status () {
 			$EYOU_MAIL watch $EYOU_SYS_NAME >/dev/null 2>&1
 			exit_val=$?
 			wait
-			[ $exit_val -eq 0 ] || echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME eyou_mail_watch 失败" >>${EYOU_SER_FILE_CONF}
+			[ $exit_val -eq 0 ] || {
+			echo "$DATE_MESS $(hostname) $EYOU_SYS_NAME eyou_mail_watch 失败" >>${EYOU_SER_FILE_CONF}
+			$SENDMAIL_FILE/take_snap $EYOU_SYS_NAME >/dev/null 2>&1
+			}
 		fi
 	else
 		exit 0
