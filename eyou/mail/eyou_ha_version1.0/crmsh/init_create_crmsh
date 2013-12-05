@@ -41,7 +41,7 @@ CONFIG_FILE="/usr/local/eyou/mail/etc/em_init_config"
 
 sysconfig_crm () {
 echo '
-crm configure rsc_defaults resource-stickiness=100
+crm configure rsc_defaults resource-stickiness=100 failure-timeout=300s
 crm configure op_defaults timeout=240s
 crm configure property stonith-enabled=false no-quorum-policy=ignore
 '
@@ -49,11 +49,11 @@ for i in `seq $DISK_NUM`
 do
 if [ "$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f1|grep ':'|wc -l)" == "0" ];then
 echo "
-crm configure primitive eyou_mount_disk_${i} ocf:heartbeat:Filesystem params device=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f1) directory=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f2) fstype=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f3) op start interval=0 timeout=60 op stop interval=0 timeout=60 meta migration-threshold=5 resource-stickiness=10
+crm configure primitive eyou_mount_disk_${i} ocf:heartbeat:Filesystem params device=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f1) directory=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f2) fstype=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f3) op start interval=0 timeout=60 op stop interval=0 timeout=60 meta migration-threshold=5 resource-stickiness=10 failure-timeout=300s
 "
 else
 echo "
-crm configure primitive eyou_mount_disk_${i} ocf:heartbeat:Filesystem params device=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f1) directory=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f2) fstype=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f3) options=nolock,tcp op start interval=0 timeout=60 op stop interval=0 timeout=60 meta migration-threshold=5 resource-stickiness=10
+crm configure primitive eyou_mount_disk_${i} ocf:heartbeat:Filesystem params device=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f1) directory=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f2) fstype=$(eval echo \${DISK_MOUNT_${i}}|cut -d ',' -f3) options=nolock,tcp op start interval=0 timeout=60 op stop interval=0 timeout=60 meta migration-threshold=5 resource-stickiness=10 failure-timeout=300s
 crm configure clone eyou_mount_clone_${i} eyou_mount_disk_${i} meta globally-unique=false
 "
 fi
@@ -65,7 +65,7 @@ crm configure primitive pingd ocf:pacemaker:ping params host_list=$HA_PING_GW mu
 echo '
 crm configure primitive eyou_check_disk lsb:eyou_check_disk \
         op monitor interval=5s timeout=15s \
-        meta migration-threshold=1 resource-stickiness=10
+        meta migration-threshold=1 resource-stickiness=10 failure-timeout=300s
 '
 echo '
 crm configure primitive eyou_check_network lsb:eyou_check_network \
@@ -135,7 +135,7 @@ do
 	[[ "$i" =~ "cron_etc" ]] && {
 	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s"
 	} || {
-	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s meta migration-threshold=5 resource-stickiness=10 "
+	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s meta migration-threshold=5 resource-stickiness=10 failure-timeout=300s"
 	}
 done
 
@@ -357,7 +357,7 @@ fi
 
 gateway_crm () {
 echo '
-crm configure primitive eyou_gateway lsb:eyou_gateway op monitor interval=1m timeout=60s
+crm configure primitive eyou_gateway lsb:eyou_gateway op monitor interval=2m timeout=180s
 crm configure colocation eyou_gateway_colo inf: eyou_check_disk eyou_gateway
 crm configure order eyou_gateway_after inf: eyou_mail_vip eyou_gateway
 '
