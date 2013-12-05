@@ -18,6 +18,10 @@
 	echo HA_PING_GW 参数为空 ;exit 1
 	}
 
+[ -z $HA_SERVER ] && {
+	echo HA_SERVER 参数为空 ;exit 1
+	}
+
 
 SENDEMAIL_DIR="/usr/local/eyou/mail/sendEmail-v1.56"
 [ -d $SENDEMAIL_DIR ] || {
@@ -54,46 +58,21 @@ crm configure clone eyou_mount_clone_${i} eyou_mount_disk_${i} meta globally-uni
 "
 fi
 done
+echo "
+crm configure primitive eyou_mail_vip ocf:heartbeat:IPaddr2 params ip=$(echo $HA_IP_FZ|cut -d ',' -f1) nic=$(echo $HA_IP_FZ|cut -d ',' -f2) cidr_netmask=$(echo $HA_IP_FZ|cut -d ',' -f3) op monitor interval=30s
+crm configure primitive pingd ocf:pacemaker:ping params host_list=$HA_PING_GW multiplier=100 name=pingd op monitor interval=15s timeout=60s
+"
 echo '
 crm configure primitive eyou_check_disk lsb:eyou_check_disk \
         op monitor interval=5s timeout=15s \
         meta migration-threshold=1 resource-stickiness=10
 '
-echo "
-crm configure primitive eyou_mail_vip ocf:heartbeat:IPaddr2 params ip=$(echo $HA_IP_FZ|cut -d ',' -f1) nic=$(echo $HA_IP_FZ|cut -d ',' -f2) cidr_netmask=$(echo $HA_IP_FZ|cut -d ',' -f3) op monitor interval=30s
-crm configure primitive pingd ocf:pacemaker:ping params host_list=$HA_PING_GW multiplier=100 name=pingd op monitor interval=15s timeout=60s
-"
-}
-
-eyou_crm () {
-for i in ${ARRAY_START[@]}
-do
-	[[ "$i" =~ "cron_etc" ]] && {
-	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s"
-	} || {
-	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s meta migration-threshold=5 resource-stickiness=10 "
-	}
-done
-
-echo '
-crm configure primitive send_email lsb:eyou_check_sendemail \
-        op monitor interval="30s" timeout="60s"
-'
-}
-
-eyou_clo_lo () {
 echo '
 crm configure primitive eyou_check_network lsb:eyou_check_network \
         op monitor interval=5s timeout=15s
 crm configure clone eyou_check_clone eyou_check_network \
         meta globally-unique="false"
 '
-if [[ "${ARRAY_START[@]} " =~ "filedrepd " ]];then
-echo '
-crm configure clone eyou_filedrepd_clone eyou_filedrepd \
-        meta globally-unique="false"
-'
-fi
 echo '
 crm configure clone pingdclone pingd \
         meta globally-unique="false"
@@ -102,9 +81,6 @@ crm configure location eyou_check_network_l eyou_check_clone \
 crm configure location eyou_ping_l eyou_mail_vip \
         rule -inf: not_defined pingd or pingd lte 0
 '
-
-
-
 if [ "$DISK_NUM" == "1" ] && [ "$DISK_TYPE" == "ext" ];then
 echo "#ext =1"
 	echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_disk_${DISK_NUM} eyou_check_disk"
@@ -134,12 +110,14 @@ elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "ext" ];then
 	elif [ "$DISK_NUM" == "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs =1"
 #		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_clone_${DISK_NUM} eyou_check_disk"
+		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_check_disk"
 		echo "crm configure order eyou_mount_after inf: eyou_mount_clone_${DISK_NUM}  eyou_check_disk eyou_mail_vip"
 	elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "nfs" ];then
 	echo "#nfs gt 1"
 		EYOU_MOUNT_DISK=$(for i in `seq $DISK_NUM`;do echo eyou_mount_disk_${i}; done)
 #		echo "crm configure colocation eyou_disk_colo inf: "${EYOU_MOUNT_DISK}
-		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_clone_${DISK_NUM} eyou_check_disk"
+#		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_mount_clone_${DISK_NUM} eyou_check_disk"
+		echo "crm configure colocation eyou_mount_colo inf: eyou_mail_vip eyou_check_disk"
 		for i in `seq $DISK_NUM`
 		do
 		echo "crm configure order eyou_mount_after_${i} inf: eyou_mount_clone_${i} eyou_check_disk eyou_mail_vip"
@@ -148,6 +126,32 @@ elif [ "$DISK_NUM" -gt "1" ] && [ "$DISK_TYPE" == "ext" ];then
 		:
 
 	fi
+
+}
+
+eyou_crm () {
+for i in ${ARRAY_START[@]}
+do
+	[[ "$i" =~ "cron_etc" ]] && {
+	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s"
+	} || {
+	echo "crm configure primitive eyou_$i lsb:eyou_mail_$i op monitor interval=1m timeout=60s meta migration-threshold=5 resource-stickiness=10 "
+	}
+done
+
+echo '
+crm configure primitive send_email lsb:eyou_check_sendemail \
+        op monitor interval="30s" timeout="60s"
+'
+}
+
+eyou_clo_lo () {
+if [[ "${ARRAY_START[@]} " =~ "filedrepd " ]];then
+echo '
+crm configure clone eyou_filedrepd_clone eyou_filedrepd \
+        meta globally-unique="false"
+'
+fi
 
 	echo '
 #crm configure order ms_mount_nfs_after inf: eyou_mount_nfs eyou_check_disk eyou_mail_vip
@@ -351,7 +355,25 @@ fi
 
 }
 
+gateway_crm () {
+echo '
+crm configure primitive eyou_gateway lsb:eyou_gateway op monitor interval=1m timeout=60s
+crm configure colocation eyou_gateway_colo inf: eyou_check_disk eyou_gateway
+crm configure order eyou_gateway_after inf: eyou_mail_vip eyou_gateway
+'
+}
+
 
 sysconfig_crm >>./crmsh
-eyou_crm >>./crmsh
-eyou_clo_lo >>./crmsh
+[ "$HA_SERVER" == "mail" ] && {
+	eyou_crm >>./crmsh
+	eyou_clo_lo >>./crmsh
+	}
+[ "$HA_SERVER" == "gateway" ] && {
+	gateway_crm >>./crmsh
+	}
+[ "$HA_SERVER" == "2in1" ] && {
+	eyou_crm >>./crmsh
+	eyou_clo_lo >>./crmsh
+	gateway_crm >>./crmsh
+	}
